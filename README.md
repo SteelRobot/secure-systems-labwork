@@ -1,24 +1,34 @@
 # Система приёма заявок на материальную поддержку (ЛР №3)
 
+Приложение для подачи и обработки заявок на материальную поддержку и ПГАС.
+См. `docs/DIVERGENCES.md` для списка всех принятых решений и расхождений с проектом.
+
 ## Запуск
 ```bash
 ./scripts/init-env.sh        # создаёт .env со случайными секретами
 docker compose up -d --build
 ```
-Остановка: `docker compose down`. Сброс базы в исходное состояние: `docker compose down -v && docker compose up -d --build`.
+Остановка: `docker compose down`.
+Сброс базы в исходное состояние: `docker compose down -v && docker compose up -d --build`.
 
 ## Адреса
 | Сервис | Адрес |
 |---|---|
 | Веб-клиент (HTTPS, самоподписанный сертификат) | https://localhost:8443 |
 | RabbitMQ консоль | http://localhost:15672 (логин/пароль из `.env`) |
-| Mailpit (письма) | http://localhost:8025 |
+| Mailpit (почта) | http://localhost:8025 |
 
-## Тестовые учётные записи (пароль – `SEED_PASSWORD` из `.env`)
-| Email | Роль | Подразделение |
-|---|---|---|
-| student1@univ.local, student2@univ.local | student | Институт компьютерных наук |
-| employee1@univ.local | employee | Институт компьютерных наук |
-| admin1@univ.local | service_admin (ответственный сотрудник) | Институт компьютерных наук |
-| admin2@univ.local | service_admin | Институт машиностроения |
-| tech@univ.local | technical_admin | – |
+## Тестовые учётные записи (пароль – `SEED_PASSWORD` из `.env`, по умолчанию `Demo-Passw0rd`)
+
+В системе выделены три роли:
+1. **Заявитель** (`applicant`) — студент или сотрудник, подающий заявки и подтверждающие документы.
+2. **Ответственный сотрудник** (`employee`) — проверяет заявки и принимает решения по своему подразделению.
+3. **Технический специалист** (`technical_admin`) — обслуживает систему (прямой доступ к инфраструктуре).
+
+| Email | Роль | Описание | Подразделение |
+|---|---|---|---|
+| `applicant1@univ.local` | `applicant` | Заявитель | Институт компьютерных наук |
+| `applicant2@univ.local` | `applicant` | Заявитель | Институт компьютерных наук |
+| `employee1@univ.local` | `employee` | Ответственный сотрудник | Институт компьютерных наук |
+| `employee2@univ.local` | `employee` | Ответственный сотрудник | Институт машиностроения |
+| `tech@univ.local` | `technical_admin` | Технический специалист | — |

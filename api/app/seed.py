@@ -1,32 +1,32 @@
-"""Тестовые данные. Запускается один раз контейнером db-seed под суперпользователем БД
-(роль app_api не имеет прав на INSERT в users). Повторный запуск безопасен."""
+"""Тестовые данные. Запускается один раз контейнером db-seed под суперпользователем БД.
+Повторный запуск безопасен."""
 import os
-
 import psycopg
-
 from .security import hash_password
 
 PEPPER = os.environ["PASSWORD_PEPPER"]
 PASSWORD = os.environ["SEED_PASSWORD"]
 
 DEPARTMENTS = ["Институт компьютерных наук", "Институт машиностроения"]
-# (university_id, ФИО, email, роль, подразделение)
+
+# Роли в системе:
+# - applicant — Заявитель (студент или сотрудник университета)
+# - employee — Ответственный сотрудник подразделения (проверяет и принимает решения)
+# - technical_admin — Технический специалист (администратор ОС/контейнерной среды)
 USERS = [
-    ("S-1001", "Иванов Иван Иванович", "student1@univ.local", "student", 0),
-    ("S-1002", "Петрова Анна Сергеевна", "student2@univ.local", "student", 0),
+    ("S-1001", "Иванов Иван Иванович", "applicant1@univ.local", "applicant", 0),
+    ("S-1002", "Петрова Анна Сергеевна", "applicant2@univ.local", "applicant", 0),
     ("E-2001", "Сидоров Пётр Петрович", "employee1@univ.local", "employee", 0),
-    ("A-3001", "Кузнецова Мария Олеговна", "admin1@univ.local", "service_admin", 0),
-    ("A-3002", "Орлов Дмитрий Андреевич", "admin2@univ.local", "service_admin", 1),
-    ("T-4001", "Тех Специалист", "tech@univ.local", "technical_admin", None),
-]
-# (email заявителя, тип, год, статус, сумма, комментарий)
-APPLICATIONS = [
-    ("student1@univ.local", "material_support", 2026, "draft", 5000, "Тяжёлое материальное положение"),
-    ("student1@univ.local", "pgas", 2026, "submitted", 12000, "Научные достижения за год"),
-    ("student2@univ.local", "material_support", 2026, "submitted", 7000, "Лечение родственника"),
-    ("student2@univ.local", "state_academic_scholarship", 2025, "approved", None, "Отличная успеваемость"),
+    ("E-2002", "Кузнецова Мария Олеговна", "employee2@univ.local", "employee", 1),
+    ("T-3001", "Тех Специалист", "tech@univ.local", "technical_admin", None),
 ]
 
+APPLICATIONS = [
+    ("applicant1@univ.local", "material_support", 2026, "draft", 5000, "Тяжёлое материальное положение"),
+    ("applicant1@univ.local", "pgas", 2026, "submitted", 12000, "Научные достижения за год"),
+    ("applicant2@univ.local", "material_support", 2026, "submitted", 7000, "Лечение родственника"),
+    ("applicant2@univ.local", "state_academic_scholarship", 2025, "approved", None, "Отличная успеваемость"),
+]
 
 def main() -> None:
     with psycopg.connect(host=os.environ["DB_HOST"], dbname=os.environ["POSTGRES_DB"],
@@ -50,7 +50,6 @@ def main() -> None:
                     (email, stype, year, status, amount, comment, status))
         conn.commit()
     print("seed: готово")
-
 
 if __name__ == "__main__":
     main()

@@ -27,5 +27,5 @@ def hash_password(password: str, pepper: str) -> tuple[str, str]:
 def verify_password(password: str, password_hash: str, pepper: str) -> bool:
     try:
         return verify_secret(password_hash.encode(), _prehash(password, pepper), Type.ID)
-    except (VerifyMismatchError, InvalidHashError):
+    except Exception:
         return False

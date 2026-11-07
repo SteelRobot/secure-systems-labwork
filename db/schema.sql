@@ -43,9 +43,8 @@ CREATE TABLE users (
     CONSTRAINT chk_users_role
         CHECK (
             role IN (
-                'student',
+                'applicant',
                 'employee',
-                'service_admin',
                 'technical_admin'
             )
         ),
