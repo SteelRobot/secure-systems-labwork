@@ -78,9 +78,6 @@ CREATE TABLE applications (
     comment TEXT,
     decision_comment TEXT,
 
-    payment_status VARCHAR(32) NOT NULL DEFAULT 'not_required',
-    payment_reference VARCHAR(100),
-
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     submitted_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -120,20 +117,6 @@ CREATE TABLE applications (
                 'under_review',
                 'approved',
                 'rejected',
-                'cancelled',
-                'paid'
-            )
-        ),
-
-    CONSTRAINT chk_applications_payment_status
-        CHECK (
-            payment_status IN (
-                'not_required',
-                'pending',
-                'sent_to_finance',
-                'processing',
-                'paid',
-                'failed',
                 'cancelled'
             )
         ),
@@ -333,9 +316,6 @@ CREATE INDEX idx_applications_support_type
 
 CREATE INDEX idx_applications_academic_year
     ON applications (academic_year);
-
-CREATE INDEX idx_applications_payment_status
-    ON applications (payment_status);
 
 CREATE INDEX idx_applications_created_at
     ON applications (created_at);

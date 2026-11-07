@@ -11,3 +11,10 @@
 *.fls
 *.log
 /auto/
+
+# --- приложение ---
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+web/dist/
