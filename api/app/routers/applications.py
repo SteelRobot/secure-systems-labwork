@@ -1,5 +1,6 @@
+from pathlib import Path
 import json
-from uuid import UUID
+from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
@@ -23,6 +24,7 @@ class DocumentItem(BaseModel):
     file_size: int
     mime_type: str
     uploaded_at: str
+    download_url: str
 
 class ApplicationDetailResponse(BaseModel):
     id: str
@@ -195,7 +197,8 @@ def get_application_by_id(
             original_name=d["original_name"],
             file_size=d["file_size"],
             mime_type=d["mime_type"],
-            uploaded_at=d["uploaded_at"].isoformat()
+            uploaded_at=d["uploaded_at"].isoformat(),
+            download_url=f"/api/applications/{app_id}/documents/{d['id']}"
         )
         for d in doc_rows
     ]
@@ -330,3 +333,199 @@ def get_applications_list(
     })
 
     return ApplicationListResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+import hashlib
+from fastapi import UploadFile, File
+
+ALLOWED_MIME_TYPES = {
+    "application/pdf": ".pdf",
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+class DocumentUploadResponse(BaseModel):
+    id: str
+    application_id: str
+    original_name: str
+    file_size: int
+    mime_type: str
+    sha256_hash: str
+    uploaded_at: str
+
+@router.post("/{app_id}/documents", status_code=status.HTTP_201_CREATED, response_model=DocumentUploadResponse)
+async def upload_document(
+    app_id: UUID,
+    request: Request,
+    file: UploadFile = File(...),
+    user: CurrentUser = Depends(get_current_user),
+):
+    ip = request.client.host if request.client else "127.0.0.1"
+
+    # 1. Проверка существования заявки и прав владельца
+    with pool.connection() as conn:
+        row = conn.execute(
+            "SELECT id, applicant_id, status FROM applications WHERE id = %s",
+            (str(app_id),)
+        ).fetchone()
+
+        if not row or str(row["applicant_id"]) != user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Заявка не найдена")
+
+        if row["status"] != "draft":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Документы можно загружать только в черновик заявки"
+            )
+
+        # Ограничение: не более 10 документов на заявку
+        doc_count = conn.execute(
+            "SELECT count(*) FROM documents WHERE application_id = %s",
+            (str(app_id),)
+        ).fetchone()["count"]
+        if doc_count >= 10:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Превышен лимит документов (максимум 10 на заявку)"
+            )
+
+    # 2. Проверка типа файла
+    content_type = file.content_type or "application/octet-stream"
+    if content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Недопустимый формат файла. Разрешены: PDF, PNG, JPEG"
+        )
+
+    # 3. Чтение файла, подсчет размера и SHA-256
+    file_bytes = await file.read()
+    file_size = len(file_bytes)
+    if file_size == 0 or file_size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Размер файла должен быть больше 0 и не превышать 10 МБ"
+        )
+
+    sha256_hash = hashlib.sha256(file_bytes).hexdigest()
+    doc_uuid = str(uuid4())
+    safe_name = Path(file.filename or "file").name
+    storage_key = f"applications/{app_id}/{doc_uuid}_{safe_name}"
+
+    # 4. Сохранение файла в объектное хранилище (RustFS S3 API)
+    from io import BytesIO
+    from ..storage import client as storage_client
+
+    try:
+        storage_client.put_object(
+            bucket_name=config.STORAGE_BUCKET,
+            object_name=storage_key,
+            data=BytesIO(file_bytes),
+            length=file_size,
+            content_type=content_type
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Ошибка при сохранении файла в хранилище"
+        )
+
+    # 5. Запись метаданных в базу данных
+    with pool.connection() as conn:
+        doc_row = conn.execute(
+            """INSERT INTO documents (id, application_id, uploaded_by, original_name, storage_key, mime_type, file_size, sha256_hash)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+               RETURNING id, application_id, original_name, file_size, mime_type, sha256_hash, uploaded_at""",
+            (doc_uuid, str(app_id), user.id, safe_name, storage_key, content_type, file_size, sha256_hash)
+        ).fetchone()
+        conn.commit()
+
+    publish("audit", {
+        "actor_user_id": user.id,
+        "action": "document.upload",
+        "entity_type": "document",
+        "entity_id": str(doc_row["id"]),
+        "details": {"application_id": str(app_id), "file_name": safe_name, "file_size": file_size},
+        "ip_address": ip,
+    })
+
+    return DocumentUploadResponse(
+        id=str(doc_row["id"]),
+        application_id=str(doc_row["application_id"]),
+        original_name=doc_row["original_name"],
+        file_size=doc_row["file_size"],
+        mime_type=doc_row["mime_type"],
+        sha256_hash=doc_row["sha256_hash"],
+        uploaded_at=doc_row["uploaded_at"].isoformat()
+    )
+
+
+from fastapi.responses import StreamingResponse
+
+@router.get("/{app_id}/documents/{doc_id}")
+def download_document(
+    app_id: UUID,
+    doc_id: UUID,
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+):
+    ip = request.client.host if request.client else "127.0.0.1"
+
+    with pool.connection() as conn:
+        # Check application access rights
+        app_row = conn.execute(
+            """SELECT a.id, a.applicant_id, a.status, u.department_id as applicant_department_id
+               FROM applications a
+               JOIN users u ON u.id = a.applicant_id
+               WHERE a.id = %s""",
+            (str(app_id),)
+        ).fetchone()
+
+        if not app_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Заявка не найдена")
+
+        has_access = False
+        if user.role == "applicant":
+            has_access = (str(app_row["applicant_id"]) == user.id)
+        elif user.role == "employee":
+            has_access = (
+                user.department_id is not None and
+                str(app_row["applicant_department_id"]) == user.department_id and
+                app_row["status"] != "draft"
+            )
+        elif user.role == "technical_admin":
+            has_access = True
+
+        if not has_access:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Заявка не найдена")
+
+        doc_row = conn.execute(
+            "SELECT id, original_name, storage_key, mime_type, file_size FROM documents WHERE id = %s AND application_id = %s",
+            (str(doc_id), str(app_id))
+        ).fetchone()
+
+        if not doc_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Документ не найден")
+
+    # Read stream from RustFS S3
+    from ..storage import client as storage_client
+    try:
+        response = storage_client.get_object(config.STORAGE_BUCKET, doc_row["storage_key"])
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден в хранилище")
+
+    publish("audit", {
+        "actor_user_id": user.id,
+        "action": "document.download",
+        "entity_type": "document",
+        "entity_id": str(doc_id),
+        "details": {"application_id": str(app_id)},
+        "ip_address": ip,
+    })
+
+    return StreamingResponse(
+        response.stream(32768),
+        media_type=doc_row["mime_type"],
+        headers={"Content-Disposition": f'inline; filename="{doc_row["original_name"]}"'}
+    )

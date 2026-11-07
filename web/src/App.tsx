@@ -18,12 +18,22 @@ interface ApplicationListItem {
   created_at: string;
 }
 
+interface DocumentItem {
+  id: string;
+  original_name: string;
+  file_size: number;
+  mime_type: string;
+  uploaded_at: string;
+  download_url: string;
+}
+
 interface ApplicationDetail extends ApplicationListItem {
   approved_amount: number | null;
   comment: string | null;
   decision_comment: string | null;
   submitted_at: string | null;
   updated_at: string;
+  documents: DocumentItem[];
 }
 
 const SUPPORT_NAMES: Record<string, string> = {
@@ -96,6 +106,24 @@ export default function App() {
       loadApplications(token);
     }
   }, [token]);
+
+  
+  const handleDownloadDoc = async (docUrl: string) => {
+    try {
+      const res = await fetch(docUrl, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Ошибка открытия файла");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -347,11 +375,11 @@ export default function App() {
           {/* Selected Application Details */}
           {(fetchedApp || fetchError) && (
             <section style={{ background: "#fff", border: "1px solid #dee2e6", borderRadius: "8px", padding: "1.2rem" }}>
-              <h2 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem" }}>3. Просмотр заявки по ID (GET /api/applications/&#123;id&#125;)</h2>
+              <h2 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem" }}>3. Детали заявки</h2>
 
               {fetchError && (
                 <div style={{ background: "#ffe3e3", color: "#c92a2a", padding: "0.6rem", borderRadius: "4px", fontSize: "0.85rem" }}>
-                  {fetchError} (Проверка прав отработала)
+                  {fetchError}
                 </div>
               )}
 
@@ -368,7 +396,77 @@ export default function App() {
                   <div><b>Год:</b> {fetchedApp.academic_year}</div>
                   {fetchedApp.requested_amount && <div><b>Сумма:</b> {fetchedApp.requested_amount} руб.</div>}
                   <div><b>Обоснование:</b> {fetchedApp.comment}</div>
-                  <div style={{ color: "#868e96", marginTop: "0.4rem", fontSize: "0.75rem" }}>Создана: {new Date(fetchedApp.created_at).toLocaleString()}</div>
+
+                  {/* Прикрепленные документы */}
+                  <div style={{ marginTop: "0.8rem", paddingTop: "0.8rem", borderTop: "1px solid #dee2e6" }}>
+                    <div style={{ fontWeight: 600, marginBottom: "0.4rem" }}>Прикреплённые документы:</div>
+                    {(!fetchedApp.documents || (fetchedApp.documents as any[]).length === 0) ? (
+                      <div style={{ color: "#868e96" }}>Документы пока не прикреплены</div>
+                    ) : (
+                      <ul style={{ margin: "0.3rem 0", paddingLeft: "1.2rem" }}>
+                        {(fetchedApp.documents as any[]).map((d: any) => (
+                          <li key={d.id} style={{ marginBottom: "0.2rem" }}>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDoc(d.download_url)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                padding: 0,
+                                color: "#1971c2",
+                                fontWeight: 600,
+                                textDecoration: "underline",
+                                cursor: "pointer",
+                                fontSize: "0.85rem"
+                              }}
+                            >
+                              📄 {d.original_name}
+                            </button>{" "}
+                            <span style={{ color: "#868e96", fontSize: "0.75rem" }}>
+                              ({(d.file_size / 1024).toFixed(1)} КБ)
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* Форма загрузки документа для заявителя в статусе draft */}
+                  {user.role === "applicant" && fetchedApp.status === "draft" && (
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const form = e.target as HTMLFormElement;
+                        const fileInput = form.elements.namedItem("docFile") as HTMLInputElement;
+                        if (!fileInput || !fileInput.files || fileInput.files.length === 0) return;
+
+                        const formData = new FormData();
+                        formData.append("file", fileInput.files[0]);
+
+                        try {
+                          const res = await fetch(`/api/applications/${fetchedApp.id}/documents`, {
+                            method: "POST",
+                            headers: { Authorization: `Bearer ${token}` },
+                            body: formData,
+                          });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data.detail || "Ошибка загрузки документа");
+                          fileInput.value = "";
+                          fetchDetail(fetchedApp.id);
+                        } catch (err: any) {
+                          alert(err.message);
+                        }
+                      }}
+                      style={{ marginTop: "0.8rem", paddingTop: "0.8rem", borderTop: "1px dashed #ced4da", display: "flex", gap: "0.5rem", alignItems: "center" }}
+                    >
+                      <input type="file" name="docFile" accept=".pdf,.png,.jpg,.jpeg" required style={{ fontSize: "0.8rem" }} />
+                      <button type="submit" style={{ padding: "0.3rem 0.8rem", fontSize: "0.8rem", background: "#2b8a3e", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: 600 }}>
+                        Прикрепить документ
+                      </button>
+                    </form>
+                  )}
+
+                  <div style={{ color: "#868e96", marginTop: "0.8rem", fontSize: "0.75rem" }}>Создана: {new Date(fetchedApp.created_at).toLocaleString()}</div>
                 </div>
               )}
             </section>
