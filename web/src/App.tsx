@@ -191,6 +191,7 @@ export default function App() {
   const fetchDetail = async (id: string) => {
     setFetchError(null);
     setFetchedApp(null);
+    setFetchedAppCheckList([]);
     setViewAppId(id);
 
     try {
@@ -200,6 +201,19 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Ошибка получения заявки");
       setFetchedApp(data);
+
+      // Загрузка списка проверок для заявки
+      try {
+        const checkRes = await fetch(`/api/applications/${id}/completeness-check`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          setFetchedAppCheckList(checkData);
+        }
+      } catch (e) {
+        setFetchedAppCheckList([]);
+      }
     } catch (err: any) {
       setFetchError(err.message);
     }
@@ -334,9 +348,41 @@ export default function App() {
 
           {/* Applications list table */}
           <section style={{ background: "#fff", border: "1px solid #dee2e6", borderRadius: "8px", padding: "1.2rem" }}>
-            <h2 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem" }}>
-              2. Список доступных заявок (GET /api/applications)
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <h2 style={{ margin: 0, fontSize: "1.1rem" }}>
+                2. Список доступных заявок (GET /api/applications)
+              </h2>
+              {user.role === "employee" && (
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/reports/applications", {
+                        method: "GET",
+                        headers: { Authorization: `Bearer ${token}` }
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.detail || "Ошибка запроса отчёта");
+                      alert("Запрос на формирование отчёта отправлен. Ожидание завершения...");
+                      
+                      setTimeout(async () => {
+                        const stRes = await fetch(`/api/reports/${data.report_id}`, {
+                          headers: { Authorization: `Bearer ${token}` }
+                        });
+                        const stData = await stRes.json();
+                        if (stData.status === "completed" && stData.download_url) {
+                          handleDownloadDoc(stData.download_url);
+                        } else {
+                          alert("Отчёт формируется, попробуйте позже.");
+                        }
+                      }, 2000);
+                    } catch (err: any) { alert(err.message); }
+                  }}
+                  style={{ padding: "0.4rem 0.8rem", background: "#1971c2", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" }}
+                >
+                  Сформировать и скачать сводный отчёт (CSV)
+                </button>
+              )}
+            </div>
             {appList.length === 0 ? (
               <div style={{ color: "#666", fontSize: "0.9rem" }}>Заявок пока нет</div>
             ) : (
@@ -533,7 +579,7 @@ export default function App() {
                   </div>
 
                   {/* Форма загрузки документа для заявителя в статусе draft */}
-                  {user.role === "applicant" && (fetchedApp.status === "draft" || fetchedApp.status === "needs_revision") && (
+                  {fetchedApp.status !== "approved" && fetchedApp.status !== "rejected" && fetchedApp.status !== "cancelled" && (user.role === "applicant" || user.role === "employee") && (
                     <form
                       onSubmit={async (e) => {
                         e.preventDefault();
@@ -568,7 +614,7 @@ export default function App() {
                   )}
 
                                     {/* Кнопка отправки заявки из draft в submitted */}
-                  {user.role === "applicant" && (fetchedApp.status === "draft" || fetchedApp.status === "needs_revision") && (
+                  {fetchedApp.status !== "approved" && fetchedApp.status !== "rejected" && fetchedApp.status !== "cancelled" && (user.role === "applicant" || user.role === "employee") && (
                     <div style={{ marginTop: "1rem", paddingTop: "0.8rem", borderTop: "1px solid #dee2e6" }}>
                       <button
                         onClick={async () => {
@@ -600,23 +646,25 @@ export default function App() {
                   <div style={{ marginTop: "1rem", paddingTop: "0.8rem", borderTop: "1px solid #dee2e6" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                       <span style={{ fontWeight: 600 }}>Проверка полноты обращения:</span>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const res = await fetch(`/api/applications/${fetchedApp.id}/completeness-check`, {
-                              method: "POST",
-                              headers: { Authorization: `Bearer ${token}` }
-                            });
-                            const data = await res.json();
-                            if (!res.ok) throw new Error(data.detail || "Ошибка запуска проверки");
-                            alert("Проверка запущена! Результат обновится через секунду.");
-                            setTimeout(() => fetchDetail(fetchedApp.id), 1500);
-                          } catch (err: any) { alert(err.message); }
-                        }}
-                        style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem", background: "#e7f5ff", color: "#1971c2", border: "1px solid #a5d8ff", borderRadius: "4px", cursor: "pointer" }}
-                      >
-                        Запустить проверку
-                      </button>
+                      {fetchedApp.status !== "approved" && fetchedApp.status !== "rejected" && fetchedApp.status !== "cancelled" && (user.role === "applicant" || user.role === "employee") && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/applications/${fetchedApp.id}/completeness-check`, {
+                                method: "POST",
+                                headers: { Authorization: `Bearer ${token}` }
+                              });
+                              const data = await res.json();
+                              if (!res.ok) throw new Error(data.detail || "Ошибка запуска проверки");
+                              alert("Проверка запущена! Результат обновится через секунду.");
+                              setTimeout(() => fetchDetail(fetchedApp.id), 1500);
+                            } catch (err: any) { alert(err.message); }
+                          }}
+                          style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem", background: "#e7f5ff", color: "#1971c2", border: "1px solid #a5d8ff", borderRadius: "4px", cursor: "pointer" }}
+                        >
+                          Запустить проверку
+                        </button>
+                      )}
                     </div>
 
                     {fetchedAppCheckList && fetchedAppCheckList.length > 0 ? (
@@ -649,42 +697,6 @@ export default function App() {
                       <div style={{ color: "#868e96", fontSize: "0.8rem" }}>Проверка ещё не проводилась</div>
                     )}
                   </div>
-
-                                    {/* Генерация сводного отчёта для ответственного сотрудника */}
-                  {user.role === "employee" && (
-                    <div style={{ marginTop: "1rem", paddingTop: "0.8rem", borderTop: "1px solid #dee2e6" }}>
-                      <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Сводный отчёт подразделения:</div>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const res = await fetch("/api/reports/applications", {
-                              method: "GET",
-                              headers: { Authorization: `Bearer ${token}` }
-                            });
-                            const data = await res.json();
-                            if (!res.ok) throw new Error(data.detail || "Ошибка запроса отчёта");
-                            alert("Запрос на формирование отчёта отправлен. Ожидание завершения...");
-                            
-                            // Poll status after 2 seconds
-                            setTimeout(async () => {
-                              const stRes = await fetch(`/api/reports/${data.report_id}`, {
-                                headers: { Authorization: `Bearer ${token}` }
-                              });
-                              const stData = await stRes.json();
-                              if (stData.status === "completed" && stData.download_url) {
-                                handleDownloadDoc(stData.download_url);
-                              } else {
-                                alert("Отчёт формируется, попробуйте позже.");
-                              }
-                            }, 2000);
-                          } catch (err: any) { alert(err.message); }
-                        }}
-                        style={{ padding: "0.4rem 0.8rem", background: "#1971c2", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: 600 }}
-                      >
-                        Сформировать и скачать сводный отчёт (CSV)
-                      </button>
-                    </div>
-                  )}
                   <div style={{ color: "#868e96", marginTop: "0.8rem", fontSize: "0.75rem" }}>Создана: {new Date(fetchedApp.created_at).toLocaleString()}</div>
                 </div>
               )}

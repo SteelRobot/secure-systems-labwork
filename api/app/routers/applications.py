@@ -804,15 +804,28 @@ def trigger_completeness_check(
         if not app_row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Заявка не найдена")
 
-        # Запускать ИИ-проверку может только заявитель для своих заявок
-        if user.role != "applicant" or str(app_row["applicant_id"]) != user.id:
+        # Запускать ИИ-проверку может заявитель для своих неокончательных заявок
+        # или ответственный сотрудник своего подразделения для незавершённых заявок
+        has_access = False
+        if user.role == "applicant":
+            has_access = (str(app_row["applicant_id"]) == user.id)
+        elif user.role == "employee":
+            has_access = (
+                user.department_id is not None and
+                str(app_row["applicant_department_id"]) == user.department_id and
+                app_row["status"] != "draft"
+            )
+        elif user.role == "technical_admin":
+            has_access = True
+
+        if not has_access:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Заявка не найдена")
 
-        # Проверка допустима только для неокончательных заявок (draft, needs_revision)
-        if app_row["status"] not in ("draft", "needs_revision"):
+        # Проверка допустима только для незавершённых заявок (не approved, rejected, cancelled)
+        if app_row["status"] in ("approved", "rejected", "cancelled"):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Проверка полноты доступна только для черновиков и заявок на доработке"
+                detail="Проверка полноты доступна только для незавершённых заявок"
             )
 
         # Check rate limiting: max 3 checks per application per hour
