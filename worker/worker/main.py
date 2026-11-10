@@ -1,3 +1,6 @@
+from minio import Minio
+import redis
+import httpx
 """Фоновый обработчик очередей RabbitMQ: audit, notifications, reports.
 Записывает события аудита в базу данных PostgreSQL (под ролью app_worker)."""
 import json
@@ -12,6 +15,9 @@ logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"),
 log = logging.getLogger("worker")
 
 DB_CONNINFO = f"host={os.environ['DB_HOST']} dbname={os.environ['DB_NAME']} user={os.environ['DB_USER']} password={os.environ['DB_PASSWORD']}"
+
+r = redis.Redis(host=os.environ["REDIS_HOST"], password=os.environ["REDIS_PASSWORD"], decode_responses=True)
+storage_client = Minio(os.environ["STORAGE_ENDPOINT"], access_key=os.environ["STORAGE_ACCESS_KEY"], secret_key=os.environ["STORAGE_SECRET_KEY"], secure=False)
 
 def handle_audit(msg: dict) -> None:
     log.info("audit event received: %s", msg)
@@ -34,11 +40,119 @@ def handle_audit(msg: dict) -> None:
         )
         conn.commit()
 
+
 def handle_notifications(msg: dict) -> None:
-    log.info("notification: %s", msg)
+    log.info("notification event received: %s", msg)
+    if msg.get("task") == "llm_check":
+        check_id = msg.get("check_id")
+        app_id = msg.get("application_id")
+        if not check_id or not app_id:
+            return
+
+        time.sleep(1) # Имитация обработки модели
+
+        issues = [
+            "Рекомендуется перепроверить корректность указания периода поддержки",
+            "Обратите внимание на соответствие даты загруженных справок текущему учебному семестру"
+        ]
+        recommendations = [
+            "Формально необходимые сведения присутствуют в обращении",
+            "Заявка передана на проверку ответственным сотрудникам подразделения"
+        ]
+
+        with psycopg.connect(DB_CONNINFO) as conn:
+            conn.execute(
+                """UPDATE llm_checks
+                   SET status = 'completed',
+                       is_complete = TRUE,
+                       issues = %s::jsonb,
+                       recommendations = %s::jsonb,
+                       completed_at = CURRENT_TIMESTAMP
+                   WHERE id = %s""",
+                (json.dumps(issues), json.dumps(recommendations), check_id)
+            )
+            conn.commit()
+        log.info("llm check %s completed for application %s", check_id, app_id)
+
 
 def handle_reports(msg: dict) -> None:
-    log.info("report: %s", msg)
+    log.info("report task received: %s", msg)
+    if msg.get("task") == "generate_report":
+        report_id = msg.get("report_id")
+        department_id = msg.get("department_id")
+        if not report_id or not department_id:
+            return
+
+        # 1. Извлекаем данные по заявкам подразделения из БД
+        with psycopg.connect(DB_CONNINFO) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT a.id, u.full_name, u.university_id, a.support_type, a.academic_year,
+                              a.status, a.requested_amount, a.approved_amount, a.created_at, a.submitted_at
+                       FROM applications a
+                       JOIN users u ON u.id = a.applicant_id
+                       WHERE u.department_id = %s AND a.status != 'draft'
+                       ORDER BY a.created_at DESC""",
+                    (department_id,)
+                )
+                rows = cur.fetchall()
+
+        # 2. Формируем CSV в памяти
+        import io, csv
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID Заявки", "ФИО Заявителя", "Номер", "Тип поддержки", "Учебный год", "Статус", "Запрошено", "Одобрено", "Дата создания"])
+
+        for r_row in rows:
+            writer.writerow([
+                str(r_row[0]), r_row[1], r_row[2], r_row[3], r_row[4], r_row[5],
+                float(r_row[6]) if r_row[6] is not None else "",
+                float(r_row[7]) if r_row[7] is not None else "",
+                r_row[8].isoformat() if r_row[8] else ""
+            ])
+
+        csv_bytes = output.getvalue().encode("utf-8")
+
+        # 3. Загружаем CSV в хранилище RustFS (S3)
+        storage_key = f"reports/report_{report_id}.csv"
+        try:
+            storage_client.put_object(
+                bucket_name="documents",
+                object_name=storage_key,
+                data=io.BytesIO(csv_bytes),
+                length=len(csv_bytes),
+                content_type="text/csv"
+            )
+            download_url = f"/api/reports/{report_id}/download"
+            log.info("report %s saved to S3: %s", report_id, storage_key)
+        except Exception as e:
+            log.exception("failed to upload report to S3")
+            download_url = None
+
+        # 4. Отправляем уведомление финансовому подразделению (external-stubs)
+        try:
+            finance_url = os.environ.get("FINANCE_URL", "http://external-stubs:8080/finance/reports")
+            finance_token = os.environ.get("FINANCE_API_TOKEN", "")
+            httpx.post(
+                finance_url,
+                json={"report_id": report_id, "download_url": download_url, "records_count": len(rows)},
+                headers={"Authorization": f"Bearer {finance_token}"},
+                timeout=5.0
+            )
+            log.info("notified finance stub about report %s", report_id)
+        except Exception as e:
+            log.exception("failed to notify finance stub")
+
+        # 5. Обновляем статус отчёта в Redis
+        report_data = {
+            "report_id": report_id,
+            "status": "completed",
+            "download_url": download_url,
+            "expires_at": int(time.time()) + 86400,
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        }
+        r.setex(f"report:{report_id}", 86400, json.dumps(report_data))
+
 
 HANDLERS = {
     "audit": handle_audit,

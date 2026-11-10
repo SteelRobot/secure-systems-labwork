@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from . import config
 from .cache import r as redis_client
 from .db import pool
-from .routers import auth, applications
+from .routers import auth, applications, reports
 
 logging.basicConfig(level=config.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("api")
@@ -39,3 +39,4 @@ def health():
 # Подключение роутеров
 app.include_router(auth.router)
 app.include_router(applications.router)
+app.include_router(reports.router)

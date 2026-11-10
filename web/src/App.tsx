@@ -46,6 +46,7 @@ const STATUS_NAMES: Record<string, { label: string; color: string; bg: string }>
   draft: { label: "Черновик", color: "#495057", bg: "#e9ecef" },
   submitted: { label: "Отправлена", color: "#1971c2", bg: "#e7f5ff" },
   under_review: { label: "На рассмотрении", color: "#f59f00", bg: "#fff9db" },
+  needs_revision: { label: "На доработке", color: "#d9480f", bg: "#ffe8cc" },
   approved: { label: "Одобрена", color: "#2b8a3e", bg: "#ebfbee" },
   rejected: { label: "Отклонена", color: "#c92a2a", bg: "#ffe3e3" },
   cancelled: { label: "Отозвана", color: "#868e96", bg: "#f1f3f5" },
@@ -73,6 +74,7 @@ export default function App() {
   const [createdApp, setCreatedApp] = useState<ApplicationDetail | null>(null);
   const [viewAppId, setViewAppId] = useState("");
   const [fetchedApp, setFetchedApp] = useState<ApplicationDetail | null>(null);
+  const [fetchedAppCheckList, setFetchedAppCheckList] = useState<any[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Application List
@@ -396,6 +398,105 @@ export default function App() {
                   <div><b>Год:</b> {fetchedApp.academic_year}</div>
                   {fetchedApp.requested_amount && <div><b>Сумма:</b> {fetchedApp.requested_amount} руб.</div>}
                   <div><b>Обоснование:</b> {fetchedApp.comment}</div>
+                  {fetchedApp.approved_amount && <div><b>Одобренная сумма:</b> {fetchedApp.approved_amount} руб.</div>}
+                  {fetchedApp.decision_comment && (
+                    <div style={{ marginTop: "0.4rem", padding: "0.5rem 0.8rem", background: "#fff9db", borderLeft: "3px solid #f59f00", borderRadius: "4px" }}>
+                      <b>Комментарий сотрудника:</b> {fetchedApp.decision_comment}
+                    </div>
+                  )}
+                  {/* Форма принятия решения для ответственного сотрудника */}
+                  {user.role === "employee" && fetchedApp.status !== "draft" && (
+                    <div style={{ marginTop: "1rem", paddingTop: "0.8rem", borderTop: "1px solid #dee2e6" }}>
+                      <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Управление состоянием заявки:</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                        {fetchedApp.status === "submitted" && (
+                          <button
+                            onClick={async () => {
+                              const comment = prompt("Комментарий (необязательно):") || "";
+                              try {
+                                const res = await fetch(`/api/applications/${fetchedApp.id}/status`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                  body: JSON.stringify({ status: "under_review", decision_comment: comment }),
+                                });
+                                if (!res.ok) throw new Error((await res.json()).detail);
+                                fetchDetail(fetchedApp.id);
+                                if (token) loadApplications(token);
+                              } catch (err: any) { alert(err.message); }
+                            }}
+                            style={{ padding: "0.4rem 0.8rem", background: "#f59f00", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                          >
+                            Взять на рассмотрение
+                          </button>
+                        )}
+
+                        {fetchedApp.status === "under_review" && (
+                          <>
+                            <button
+                              onClick={async () => {
+                                const comment = prompt("Причина возврата на доработку:");
+                                if (!comment) return;
+                                try {
+                                  const res = await fetch(`/api/applications/${fetchedApp.id}/status`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                    body: JSON.stringify({ status: "needs_revision", decision_comment: comment }),
+                                  });
+                                  if (!res.ok) throw new Error((await res.json()).detail);
+                                  fetchDetail(fetchedApp.id);
+                                  if (token) loadApplications(token);
+                                } catch (err: any) { alert(err.message); }
+                              }}
+                              style={{ padding: "0.4rem 0.8rem", background: "#d9480f", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                            >
+                              Вернуть на доработку
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                const amountStr = prompt("Одобренная сумма (руб):", fetchedApp.requested_amount?.toString() || "");
+                                const comment = prompt("Комментарий к решению:") || "Одобрено";
+                                const amount = amountStr ? Number(amountStr) : null;
+                                try {
+                                  const res = await fetch(`/api/applications/${fetchedApp.id}/status`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                    body: JSON.stringify({ status: "approved", approved_amount: amount, decision_comment: comment }),
+                                  });
+                                  if (!res.ok) throw new Error((await res.json()).detail);
+                                  fetchDetail(fetchedApp.id);
+                                  if (token) loadApplications(token);
+                                } catch (err: any) { alert(err.message); }
+                              }}
+                              style={{ padding: "0.4rem 0.8rem", background: "#2b8a3e", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                            >
+                              Одобрить заявку
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                const comment = prompt("Причина отказа:");
+                                if (!comment) return;
+                                try {
+                                  const res = await fetch(`/api/applications/${fetchedApp.id}/status`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                                    body: JSON.stringify({ status: "rejected", decision_comment: comment }),
+                                  });
+                                  if (!res.ok) throw new Error((await res.json()).detail);
+                                  fetchDetail(fetchedApp.id);
+                                  if (token) loadApplications(token);
+                                } catch (err: any) { alert(err.message); }
+                              }}
+                              style={{ padding: "0.4rem 0.8rem", background: "#c92a2a", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                            >
+                              Отклонить заявку
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Прикрепленные документы */}
                   <div style={{ marginTop: "0.8rem", paddingTop: "0.8rem", borderTop: "1px solid #dee2e6" }}>
@@ -432,7 +533,7 @@ export default function App() {
                   </div>
 
                   {/* Форма загрузки документа для заявителя в статусе draft */}
-                  {user.role === "applicant" && fetchedApp.status === "draft" && (
+                  {user.role === "applicant" && (fetchedApp.status === "draft" || fetchedApp.status === "needs_revision") && (
                     <form
                       onSubmit={async (e) => {
                         e.preventDefault();
@@ -466,6 +567,124 @@ export default function App() {
                     </form>
                   )}
 
+                                    {/* Кнопка отправки заявки из draft в submitted */}
+                  {user.role === "applicant" && (fetchedApp.status === "draft" || fetchedApp.status === "needs_revision") && (
+                    <div style={{ marginTop: "1rem", paddingTop: "0.8rem", borderTop: "1px solid #dee2e6" }}>
+                      <button
+                        onClick={async () => {
+                          if (!confirm("Вы уверены, что хотите отправить заявку? После отправки её нельзя будет редактировать.")) return;
+                          try {
+                            const res = await fetch(`/api/applications/${fetchedApp.id}/submit`, {
+                              method: "PATCH",
+                              headers: {
+                                Authorization: `Bearer ${token}`,
+                                "Idempotency-Key": `submit-ui-${Date.now()}`
+                              },
+                            });
+                            const data = await res.json();
+                            if (!res.ok) throw new Error(data.detail || "Ошибка отправки заявки");
+                            fetchDetail(fetchedApp.id);
+                            if (token) loadApplications(token);
+                          } catch (err: any) {
+                            alert(err.message);
+                          }
+                        }}
+                        style={{ padding: "0.6rem 1.2rem", background: "#1971c2", color: "#fff", border: "none", borderRadius: "4px", fontWeight: 600, cursor: "pointer" }}
+                      >
+                        Отправить заявку в подразделение
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Секция ИИ-проверки полноты заявки */}
+                  <div style={{ marginTop: "1rem", paddingTop: "0.8rem", borderTop: "1px solid #dee2e6" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                      <span style={{ fontWeight: 600 }}>Проверка полноты обращения:</span>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(`/api/applications/${fetchedApp.id}/completeness-check`, {
+                              method: "POST",
+                              headers: { Authorization: `Bearer ${token}` }
+                            });
+                            const data = await res.json();
+                            if (!res.ok) throw new Error(data.detail || "Ошибка запуска проверки");
+                            alert("Проверка запущена! Результат обновится через секунду.");
+                            setTimeout(() => fetchDetail(fetchedApp.id), 1500);
+                          } catch (err: any) { alert(err.message); }
+                        }}
+                        style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem", background: "#e7f5ff", color: "#1971c2", border: "1px solid #a5d8ff", borderRadius: "4px", cursor: "pointer" }}
+                      >
+                        Запустить проверку
+                      </button>
+                    </div>
+
+                    {fetchedAppCheckList && fetchedAppCheckList.length > 0 ? (
+                      <div style={{ background: "#fff", border: "1px solid #e9ecef", borderRadius: "4px", padding: "0.6rem", fontSize: "0.8rem" }}>
+                        <div style={{ marginBottom: "0.3rem" }}>
+                          <b>Статус:</b> {fetchedAppCheckList[0].status === "completed" ? "Завершена" : "Обрабатывается..."}
+                        </div>
+                        {fetchedAppCheckList[0].issues && fetchedAppCheckList[0].issues.length > 0 && (
+                          <div style={{ marginBottom: "0.3rem" }}>
+                            <b>Замечания:</b>
+                            <ul style={{ margin: "0.2rem 0", paddingLeft: "1rem" }}>
+                              {fetchedAppCheckList[0].issues.map((issue: string, idx: number) => (
+                                <li key={idx}>{issue}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {fetchedAppCheckList[0].recommendations && fetchedAppCheckList[0].recommendations.length > 0 && (
+                          <div>
+                            <b>Выводы:</b>
+                            <ul style={{ margin: "0.2rem 0", paddingLeft: "1rem" }}>
+                              {fetchedAppCheckList[0].recommendations.map((rec: string, idx: number) => (
+                                <li key={idx}>{rec}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ color: "#868e96", fontSize: "0.8rem" }}>Проверка ещё не проводилась</div>
+                    )}
+                  </div>
+
+                                    {/* Генерация сводного отчёта для ответственного сотрудника */}
+                  {user.role === "employee" && (
+                    <div style={{ marginTop: "1rem", paddingTop: "0.8rem", borderTop: "1px solid #dee2e6" }}>
+                      <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>Сводный отчёт подразделения:</div>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/reports/applications", {
+                              method: "GET",
+                              headers: { Authorization: `Bearer ${token}` }
+                            });
+                            const data = await res.json();
+                            if (!res.ok) throw new Error(data.detail || "Ошибка запроса отчёта");
+                            alert("Запрос на формирование отчёта отправлен. Ожидание завершения...");
+                            
+                            // Poll status after 2 seconds
+                            setTimeout(async () => {
+                              const stRes = await fetch(`/api/reports/${data.report_id}`, {
+                                headers: { Authorization: `Bearer ${token}` }
+                              });
+                              const stData = await stRes.json();
+                              if (stData.status === "completed" && stData.download_url) {
+                                handleDownloadDoc(stData.download_url);
+                              } else {
+                                alert("Отчёт формируется, попробуйте позже.");
+                              }
+                            }, 2000);
+                          } catch (err: any) { alert(err.message); }
+                        }}
+                        style={{ padding: "0.4rem 0.8rem", background: "#1971c2", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: 600 }}
+                      >
+                        Сформировать и скачать сводный отчёт (CSV)
+                      </button>
+                    </div>
+                  )}
                   <div style={{ color: "#868e96", marginTop: "0.8rem", fontSize: "0.75rem" }}>Создана: {new Date(fetchedApp.created_at).toLocaleString()}</div>
                 </div>
               )}
