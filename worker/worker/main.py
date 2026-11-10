@@ -43,7 +43,33 @@ def handle_audit(msg: dict) -> None:
 
 def handle_notifications(msg: dict) -> None:
     log.info("notification event received: %s", msg)
-    if msg.get("task") == "llm_check":
+    if msg.get("task") == "send_email":
+        to_email = msg.get("to_email")
+        subject = msg.get("subject", "Уведомление системы")
+        body_text = msg.get("body", "")
+        if not to_email:
+            return
+        
+        # Отправка письма через SMTP в Mailpit (локальная заглушка почты)
+        import smtplib
+        from email.mime.text import MIMEText
+        
+        smtp_host = os.environ.get("SMTP_HOST", "mail")
+        smtp_port = int(os.environ.get("SMTP_PORT", 1025))
+        
+        try:
+            msg_mime = MIMEText(body_text, "plain", "utf-8")
+            msg_mime["Subject"] = subject
+            msg_mime["From"] = "noreply@univ.local"
+            msg_mime["To"] = to_email
+            
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.send_message(msg_mime)
+            log.info("sent email to %s via %s:%s", to_email, smtp_host, smtp_port)
+        except Exception:
+            log.exception("failed to send email to %s", to_email)
+
+    elif msg.get("task") == "llm_check":
         check_id = msg.get("check_id")
         app_id = msg.get("application_id")
         if not check_id or not app_id:

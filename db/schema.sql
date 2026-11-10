@@ -114,6 +114,7 @@ CREATE TABLE applications (
                 'draft',
                 'submitted',
                 'under_review',
+                'needs_revision',
                 'approved',
                 'rejected',
                 'cancelled'

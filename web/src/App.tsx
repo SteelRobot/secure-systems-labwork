@@ -226,7 +226,15 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (token) {
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e) {}
+    }
     sessionStorage.removeItem("access_token");
     sessionStorage.removeItem("user");
     setToken(null);
@@ -811,6 +819,105 @@ export default function App() {
               </button>
             </div>
           </div>
+        
+          {/* Быстрые формы: Регистрация / Восстановление доступа */}
+          <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #dee2e6", fontSize: "0.85rem" }}>
+            <details>
+              <summary style={{ cursor: "pointer", color: "#1971c2", fontWeight: 600 }}>Регистрация нового заявителя</summary>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const form = e.target as HTMLFormElement;
+                  const uid = (form.elements.namedItem("regUid") as HTMLInputElement).value;
+                  const name = (form.elements.namedItem("regName") as HTMLInputElement).value;
+                  const regEmail = (form.elements.namedItem("regEmail") as HTMLInputElement).value;
+                  const regPass = (form.elements.namedItem("regPass") as HTMLInputElement).value;
+
+                  try {
+                    const res = await fetch("/api/auth/register", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ university_id: uid, full_name: name, email: regEmail, password: regPass }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || "Ошибка регистрации");
+                    alert("Регистрация успешна! Теперь вы можете войти.");
+                    setEmail(regEmail);
+                    setPassword(regPass);
+                  } catch (err: any) { alert(err.message); }
+                }}
+                style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}
+              >
+                <input name="regUid" placeholder="Номер студенческого/удостоверения (S-9999)" required style={{ padding: "0.3rem" }} />
+                <input name="regName" placeholder="ФИО заявителя" required style={{ padding: "0.3rem" }} />
+                <input name="regEmail" type="email" placeholder="Email (new_user@univ.local)" required style={{ padding: "0.3rem" }} />
+                <input name="regPass" type="password" placeholder="Пароль (мин. 8 символов)" required style={{ padding: "0.3rem" }} />
+                <button type="submit" style={{ padding: "0.4rem", background: "#2b8a3e", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>
+                  Зарегистрироваться
+                </button>
+              </form>
+            </details>
+
+            <details style={{ marginTop: "0.5rem" }}>
+              <summary style={{ cursor: "pointer", color: "#1971c2", fontWeight: 600 }}>Забыли пароль? (Восстановление)</summary>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const form = e.target as HTMLFormElement;
+                  const resetEmail = (form.elements.namedItem("resetEmail") as HTMLInputElement).value;
+
+                  try {
+                    const res = await fetch("/api/auth/password-reset", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email: resetEmail }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || "Ошибка запроса");
+                    alert("Код отправлен в локальный почтовый сервис Mailpit (https://localhost:8025)!");
+                  } catch (err: any) { alert(err.message); }
+                }}
+                style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}
+              >
+                <input name="resetEmail" type="email" placeholder="Введите ваш Email" required style={{ padding: "0.3rem" }} />
+                <button type="submit" style={{ padding: "0.4rem", background: "#f59f00", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>
+                  Запросить код в Mailpit
+                </button>
+              </form>
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const form = e.target as HTMLFormElement;
+                  const resetEmail = (form.elements.namedItem("confirmEmail") as HTMLInputElement).value;
+                  const code = (form.elements.namedItem("confirmCode") as HTMLInputElement).value;
+                  const newPass = (form.elements.namedItem("confirmPass") as HTMLInputElement).value;
+
+                  try {
+                    const res = await fetch("/api/auth/password-reset/confirm", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email: resetEmail, reset_code: code, new_password: newPass }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || "Ошибка смены пароля");
+                    alert("Пароль успешно изменён! Войдите с новым паролем.");
+                    setEmail(resetEmail);
+                    setPassword(newPass);
+                  } catch (err: any) { alert(err.message); }
+                }}
+                style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem", borderTop: "1px dashed #ccc", paddingTop: "0.5rem" }}
+              >
+                <input name="confirmEmail" type="email" placeholder="Email" required style={{ padding: "0.3rem" }} />
+                <input name="confirmCode" placeholder="6-значный код из Mailpit" required style={{ padding: "0.3rem" }} />
+                <input name="confirmPass" type="password" placeholder="Новый пароль" required style={{ padding: "0.3rem" }} />
+                <button type="submit" style={{ padding: "0.4rem", background: "#1971c2", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>
+                  Подтвердить смену пароля
+                </button>
+              </form>
+            </details>
+          </div>
+
         </section>
       )}
     </main>

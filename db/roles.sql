@@ -14,6 +14,8 @@ GRANT USAGE ON SCHEMA public TO app_api, app_worker;
 GRANT SELECT ON departments TO app_api;
 GRANT SELECT ON users TO app_api;
 -- единственное, что API меняет в users – данные пароля (восстановление доступа)
+GRANT INSERT ON users TO app_api;
+GRANT INSERT ON users TO app_api;
 GRANT UPDATE (password_hash, password_salt, password_changed_at) ON users TO app_api;
 GRANT SELECT, INSERT, UPDATE ON applications TO app_api;
 GRANT SELECT, INSERT ON documents TO app_api;
