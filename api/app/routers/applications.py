@@ -87,7 +87,7 @@ def create_application(
     with pool.connection() as conn:
         row = conn.execute(
             """INSERT INTO applications (applicant_id, support_type, academic_year, requested_amount, comment, status)
-               VALUES (%s, %s, %s, %s, %s, 'draft')
+               VALUES (%s, %s, %s, %s, %s, 'submitted')
                RETURNING id, applicant_id, support_type, academic_year, status, requested_amount,
                          approved_amount, comment, decision_comment, created_at, submitted_at, updated_at""",
             (user.id, req.support_type, req.academic_year, req.requested_amount, req.comment)

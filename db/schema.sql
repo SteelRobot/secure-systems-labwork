@@ -77,9 +77,9 @@ CREATE TABLE applications (
     comment TEXT,
     decision_comment TEXT,
 
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    submitted_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    submitted_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
 
     reviewed_by UUID,
     reviewed_at TIMESTAMPTZ,
@@ -275,11 +275,6 @@ CREATE TABLE audit_log (
     details JSONB NOT NULL DEFAULT '{}'::jsonb,
     ip_address INET,
     occurred_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_audit_log_actor
-        FOREIGN KEY (actor_user_id)
-        REFERENCES users(id)
-        ON DELETE SET NULL,
 
     CONSTRAINT chk_audit_log_action_not_empty
         CHECK (length(trim(action)) > 0),
