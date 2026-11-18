@@ -587,7 +587,7 @@ export default function App() {
                   </div>
 
                   {/* Форма загрузки документа для заявителя в статусе draft */}
-                  {fetchedApp.status !== "approved" && fetchedApp.status !== "rejected" && fetchedApp.status !== "cancelled" && (user.role === "applicant" || user.role === "employee") && (
+		  {fetchedApp.status !== "submitted" && fetchedApp.status !== "approved" && fetchedApp.status !== "rejected" && fetchedApp.status !== "cancelled" && (user.role === "applicant" || user.role === "employee") && (
                     <form
                       onSubmit={async (e) => {
                         e.preventDefault();
@@ -614,15 +614,18 @@ export default function App() {
                       }}
                       style={{ marginTop: "0.8rem", paddingTop: "0.8rem", borderTop: "1px dashed #ced4da", display: "flex", gap: "0.5rem", alignItems: "center" }}
                     >
-                      <input type="file" name="docFile" accept=".pdf,.png,.jpg,.jpeg" required style={{ fontSize: "0.8rem" }} />
+		    {fetchedApp.status !== "submitted" && fetchedApp.status !== "approved" && fetchedApp.status !== "rejected" && fetchedApp.status !== "cancelled" && (user.role === "applicant" || user.role === "employee") && (
+                      <input type="file" name="docFile" accept=".pdf,.png,.jpg,.jpeg" required style={{ fontSize: "0.8rem" }} /> )}
+                  {fetchedApp.status !== "submitted" && fetchedApp.status !== "approved" && fetchedApp.status !== "rejected" && fetchedApp.status !== "cancelled" && (user.role === "applicant" || user.role === "employee") && (
                       <button type="submit" style={{ padding: "0.3rem 0.8rem", fontSize: "0.8rem", background: "#2b8a3e", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: 600 }}>
                         Прикрепить документ
                       </button>
+		      )}
                     </form>
                   )}
 
                                     {/* Кнопка отправки заявки из draft в submitted */}
-                  {fetchedApp.status !== "approved" && fetchedApp.status !== "rejected" && fetchedApp.status !== "cancelled" && (user.role === "applicant" || user.role === "employee") && (
+                  {fetchedApp.status !== "submitted" && fetchedApp.status !== "approved" && fetchedApp.status !== "rejected" && fetchedApp.status !== "cancelled" && (user.role === "applicant" || user.role === "employee") && (
                     <div style={{ marginTop: "1rem", paddingTop: "0.8rem", borderTop: "1px solid #dee2e6" }}>
                       <button
                         onClick={async () => {
@@ -654,7 +657,7 @@ export default function App() {
                   <div style={{ marginTop: "1rem", paddingTop: "0.8rem", borderTop: "1px solid #dee2e6" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                       <span style={{ fontWeight: 600 }}>Проверка полноты обращения:</span>
-                      {fetchedApp.status !== "approved" && fetchedApp.status !== "rejected" && fetchedApp.status !== "cancelled" && (user.role === "applicant" || user.role === "employee") && (
+                      {fetchedApp.status !== "submitted" && fetchedApp.status !== "approved" && fetchedApp.status !== "rejected" && fetchedApp.status !== "cancelled" && (user.role === "applicant" || user.role === "employee") && (
                         <button
                           onClick={async () => {
                             try {
