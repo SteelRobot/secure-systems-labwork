@@ -280,6 +280,12 @@ def get_applications_list(
         params.append(user.department_id)
         # Ответственный сотрудник НЕ видит чужие черновики
         where_clauses.append("a.status != 'draft'")
+    elif user.role == "technical_admin":
+        # Намеренно без фильтра: администратор видит все заявки.
+        pass
+    else:
+        # Неизвестная или неподдерживаемая роль — доступ запрещён.
+        raise PermissionError("Role is not allowed to list applications")
 
     if status_filter:
         where_clauses.append("a.status = %s")
