@@ -9,7 +9,7 @@ x-env-file: &env_file
 services:
   # ---------- Реляционная база данных ----------
   db:
-    image: postgres:17-alpine
+    image: postgres:19-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -18,7 +18,7 @@ services:
       DB_API_PASSWORD: ${DB_API_PASSWORD}
       DB_WORKER_PASSWORD: ${DB_WORKER_PASSWORD}
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - db-data:/var/lib/postgresql
       # выполняются один раз, при первом запуске на пустом томе, по алфавиту
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./db/init-roles.sh:/docker-entrypoint-initdb.d/02-roles.sh:ro
@@ -145,7 +145,7 @@ services:
       STORAGE_ENDPOINT: storage:9000
       STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
       STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
-      MONITORING_URL: http://external-stubs:8080/metrics
+      MONITORING_URL: http://external-stubs:8081/metrics
       MONITORING_API_TOKEN: ${MONITORING_API_TOKEN}
       JWT_SECRET: ${JWT_SECRET}
       PASSWORD_PEPPER: ${PASSWORD_PEPPER}
@@ -181,7 +181,7 @@ services:
       STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
       SMTP_HOST: mail
       SMTP_PORT: "1025"
-      FINANCE_URL: http://external-stubs:8080/finance/reports
+      FINANCE_URL: http://external-stubs:8081/finance/reports
       FINANCE_API_TOKEN: ${FINANCE_API_TOKEN}
       PUBLIC_BASE_URL: https://localhost:8443
       LOG_LEVEL: ${LOG_LEVEL}
@@ -194,7 +194,7 @@ services:
     depends_on: [api]
     ports:
       - "8443:443"
-      - "8080:80"    # редирект на HTTPS
+      - "8081:80"    # редирект на HTTPS
     networks: [front]
 
 networks:

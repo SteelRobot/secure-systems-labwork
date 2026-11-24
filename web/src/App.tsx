@@ -244,12 +244,6 @@ export default function App() {
     setAppList([]);
   };
 
-  const fillCredentials = (testEmail: string) => {
-    setEmail(testEmail);
-    setPassword("Demo-Passw0rd");
-    setError(null);
-  };
-
   return (
     <main style={{ fontFamily: "system-ui, -apple-system, sans-serif", maxWidth: "720px", margin: "2rem auto", padding: "1rem" }}>
       <header style={{ borderBottom: "2px solid #eaeaea", paddingBottom: "1rem", marginBottom: "1.5rem" }}>
@@ -787,42 +781,6 @@ export default function App() {
             </button>
           </form>
 
-          <div style={{ marginTop: "1.5rem", paddingTop: "1rem", borderTop: "1px solid #f1f3f5" }}>
-            <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.85rem", color: "#868e96", fontWeight: 600 }}>
-              Быстрый вход для тестирования (пароль Demo-Passw0rd):
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-              <button
-                type="button"
-                onClick={() => fillCredentials("applicant1@univ.local")}
-                style={{ fontSize: "0.8rem", padding: "0.3rem 0.6rem", background: "#f1f3f5", border: "1px solid #ced4da", borderRadius: "4px", cursor: "pointer" }}
-              >
-                Заявитель 1
-              </button>
-              <button
-                type="button"
-                onClick={() => fillCredentials("applicant2@univ.local")}
-                style={{ fontSize: "0.8rem", padding: "0.3rem 0.6rem", background: "#f1f3f5", border: "1px solid #ced4da", borderRadius: "4px", cursor: "pointer" }}
-              >
-                Заявитель 2
-              </button>
-              <button
-                type="button"
-                onClick={() => fillCredentials("employee1@univ.local")}
-                style={{ fontSize: "0.8rem", padding: "0.3rem 0.6rem", background: "#e7f5ff", border: "1px solid #a5d8ff", borderRadius: "4px", cursor: "pointer" }}
-              >
-                Ответственный сотр.
-              </button>
-              <button
-                type="button"
-                onClick={() => fillCredentials("tech@univ.local")}
-                style={{ fontSize: "0.8rem", padding: "0.3rem 0.6rem", background: "#f3d9fa", border: "1px solid #eebefa", borderRadius: "4px", cursor: "pointer" }}
-              >
-                Тех. специалист
-              </button>
-            </div>
-          </div>
-        
           {/* Быстрые формы: Регистрация / Восстановление доступа */}
           <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #dee2e6", fontSize: "0.85rem" }}>
             <details>

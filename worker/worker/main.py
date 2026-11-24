@@ -155,7 +155,7 @@ def handle_reports(msg: dict) -> None:
 
         # 4. Отправляем уведомление финансовому подразделению (external-stubs)
         try:
-            finance_url = os.environ.get("FINANCE_URL", "http://external-stubs:8080/finance/reports")
+            finance_url = os.environ.get("FINANCE_URL", "http://external-stubs:8081/finance/reports")
             finance_token = os.environ.get("FINANCE_API_TOKEN", "")
             httpx.post(
                 finance_url,
